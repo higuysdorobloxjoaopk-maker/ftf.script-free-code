@@ -1,472 +1,726 @@
--- FleeUI v0.1 – Biblioteca simples de interface para Flee the Facility / jogos similares
--- Uso exemplo no final do script
+-- ModuleScript: FleeMenuLib
+-- Uso: local FleeMenuLib = require(path.to.FleeMenuLib)
+-- local menu = FleeMenuLib:CreateMenu({ Title = "Meu Menu", OpenButtonImage = "rbxassetid://<IMAGE_ID_HERE>" })
 
-local FleeUI = {}
+local FleeMenuLib = {}
+FleeMenuLib.__index = FleeMenuLib
 
+local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
-local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
 
--- ────────────────────────────────────────────────
--- Configuração inicial da GUI
--- ────────────────────────────────────────────────
-
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "FleeUI_Lib"
-screenGui.ResetOnSpawn = false
-screenGui.Parent = playerGui
-
-local mainFrame = Instance.new("Frame")
-mainFrame.Name = "Main"
-mainFrame.Size = UDim2.new(0.38, 0, 0.62, 0)
-mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-mainFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
-mainFrame.BorderSizePixel = 0
-mainFrame.ClipsDescendants = true
-mainFrame.Visible = true
-mainFrame.Parent = screenGui
-
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 12)
-corner.Parent = mainFrame
-
-local shadow = Instance.new("ImageLabel")
-shadow.Size = UDim2.new(1, 40, 1, 40)
-shadow.Position = UDim2.new(0, -20, 0, -20)
-shadow.BackgroundTransparency = 1
-shadow.Image = "rbxassetid://6014261993" -- sombra preta suave (mude se quiser)
-shadow.ImageTransparency = 0.6
-shadow.ScaleType = Enum.ScaleType.Slice
-shadow.SliceCenter = Rect.new(49,49,450,450)
-shadow.Parent = mainFrame
-shadow.ZIndex = -1
-
-local topBar = Instance.new("Frame")
-topBar.Size = UDim2.new(1,0,0,42)
-topBar.BackgroundColor3 = Color3.fromRGB(18,18,18)
-topBar.BorderSizePixel = 0
-topBar.Parent = mainFrame
-
-local titleLabel = Instance.new("TextLabel")
-titleLabel.Size = UDim2.new(0.6,0,1,0)
-titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "Flee Menu"
-titleLabel.TextColor3 = Color3.new(1,1,1)
-titleLabel.TextScaled = true
-titleLabel.Font = Enum.Font.GothamBold
-titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-titleLabel.TextXOffset = 16
-titleLabel.Parent = topBar
-
--- Botão minimizar / maximizar (ícone circular fixo)
-local minimizeBtn = Instance.new("ImageButton")
-minimizeBtn.Name = "MinimizeBtn"
-minimizeBtn.Size = UDim2.new(0,38,0,38)
-minimizeBtn.Position = UDim2.new(1,-46,0.5,0)
-minimizeBtn.AnchorPoint = Vector2.new(1,0.5)
-minimizeBtn.BackgroundTransparency = 1
-minimizeBtn.Image = "rbxassetid://7072718362" -- ícone de menos / quadrado (você troca depois)
-minimizeBtn.ImageColor3 = Color3.fromRGB(180,180,180)
-minimizeBtn.Parent = topBar
-
-local minBtnCorner = Instance.new("UICorner")
-minBtnCorner.CornerRadius = UDim.new(1,0)
-minBtnCorner.Parent = minimizeBtn
-
-local minBtnStroke = Instance.new("UIStroke")
-minBtnStroke.Color = Color3.fromRGB(90,90,90)
-minBtnStroke.Thickness = 1.5
-minBtnStroke.Transparency = 0.4
-minBtnStroke.Parent = minimizeBtn
-
--- Estado minimizado
-local minimized = false
-local originalSize = mainFrame.Size
-
-minimizeBtn.MouseButton1Click:Connect(function()
-    minimized = not minimized
-    if minimized then
-        mainFrame:TweenSize(UDim2.new(0.12,0,0.08,0), "Out", "Quad", 0.35, true)
-        minimizeBtn.Image = "rbxassetid://7072721037" -- ícone de expandir (troque)
-    else
-        mainFrame:TweenSize(originalSize, "Out", "Quad", 0.35, true)
-        minimizeBtn.Image = "rbxassetid://7072718362" -- ícone de minimizar
-    end
-end)
-
--- Conteúdo principal (onde ficam as abas)
-local content = Instance.new("Frame")
-content.Name = "Content"
-content.Size = UDim2.new(1,0,1,-50)
-content.Position = UDim2.new(0,0,0,50)
-content.BackgroundTransparency = 1
-content.Parent = mainFrame
-
-local tabButtonsHolder = Instance.new("Frame")
-tabButtonsHolder.Size = UDim2.new(1,0,0,40)
-tabButtonsHolder.BackgroundTransparency = 1
-tabButtonsHolder.Parent = content
-
-local tabContent = Instance.new("ScrollingFrame")
-tabContent.Name = "TabContent"
-tabContent.Size = UDim2.new(1,-16,1,-48)
-tabContent.Position = UDim2.new(0,8,0,44)
-tabContent.BackgroundTransparency = 1
-tabContent.ScrollBarThickness = 5
-tabContent.ScrollBarImageColor3 = Color3.fromRGB(80,80,80)
-tabContent.AutomaticCanvasSize = Enum.AutomaticSize.Y
-tabContent.CanvasSize = UDim2.new(0,0,0,0)
-tabContent.Parent = content
-
-local tabList = Instance.new("UIListLayout")
-tabList.Padding = UDim.new(0,8)
-tabList.FillDirection = Enum.FillDirection.Vertical
-tabList.SortOrder = Enum.SortOrder.LayoutOrder
-tabList.Parent = tabContent
-
--- ────────────────────────────────────────────────
--- Funções de criação de elementos
--- ────────────────────────────────────────────────
-
-local elementCounter = 0
-
-local function createElementWrapper(name, parent)
-    elementCounter += 1
-    local id = "elem_" .. elementCounter
-
-    local frame = Instance.new("Frame")
-    frame.Name = name .. "_" .. id
-    frame.Size = UDim2.new(1,0,0,54)
-    frame.BackgroundColor3 = Color3.fromRGB(38,38,38)
-    frame.BorderSizePixel = 0
-    frame.Parent = parent
-
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0,8)
-    corner.Parent = frame
-
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0.58,0,1,0)
-    label.BackgroundTransparency = 1
-    label.Text = name
-    label.TextColor3 = Color3.new(0.95,0.95,0.95)
-    label.TextScaled = true
-    label.Font = Enum.Font.GothamSemibold
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.TextXOffset = 16
-    label.Parent = frame
-
-    local obj = { Id = id, Frame = frame, Label = label }
-
-    function obj:SetLabel(text)
-        label.Text = text
-    end
-
-    return obj, frame
+local function newId()
+	-- cria ID simples único
+	return HttpService:GenerateGUID(false)
 end
 
--- Toggle estilo iOS
-function FleeUI:CreateToggle(parent, name, default, callback)
-    local obj, frame = createElementWrapper(name, parent)
-
-    local track = Instance.new("Frame")
-    track.Size = UDim2.new(0,54,0,28)
-    track.Position = UDim2.new(1,-70,0.5,0)
-    track.AnchorPoint = Vector2.new(1,0.5)
-    track.BackgroundColor3 = default and Color3.fromRGB(0,170,100) or Color3.fromRGB(70,70,70)
-    track.BorderSizePixel = 0
-    track.Parent = frame
-
-    local trackCorner = Instance.new("UICorner")
-    trackCorner.CornerRadius = UDim.new(1,0)
-    trackCorner.Parent = track
-
-    local knob = Instance.new("Frame")
-    knob.Size = UDim2.new(0,24,0,24)
-    knob.Position = UDim2.new(0,2,0.5,0)
-    knob.AnchorPoint = Vector2.new(0,0.5)
-    knob.BackgroundColor3 = Color3.new(1,1,1)
-    knob.Parent = track
-
-    local knobCorner = Instance.new("UICorner")
-    knobCorner.CornerRadius = UDim.new(1,0)
-    knobCorner.Parent = knob
-
-    local state = default or false
-
-    local function update()
-        if state then
-            track.BackgroundColor3 = Color3.fromRGB(0,170,100)
-            TweenService:Create(knob, TweenInfo.new(0.22,Enum.EasingStyle.Quad), {Position = UDim2.new(0,28,0.5,0)}):Play()
-        else
-            track.BackgroundColor3 = Color3.fromRGB(70,70,70)
-            TweenService:Create(knob, TweenInfo.new(0.22,Enum.EasingStyle.Quad), {Position = UDim2.new(0,2,0.5,0)}):Play()
-        end
-    end
-
-    update()
-
-    track.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            state = not state
-            update()
-            if callback then callback(state) end
-        end
-    end)
-
-    function obj:Set(value)
-        state = value
-        update()
-        if callback then callback(state) end
-    end
-
-    function obj:Get()
-        return state
-    end
-
-    return obj
+-- Utility small helpers
+local function setProps(inst, props)
+	for k,v in pairs(props or {}) do
+		pcall(function() inst[k] = v end)
+	end
 end
 
--- Button simples (clique único)
-function FleeUI:CreateButton(parent, name, callback)
-    local obj, frame = createElementWrapper(name, parent)
-    frame.Size = UDim2.new(1,0,0,48)
-    frame.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
-
-    obj.Label.TextColor3 = Color3.new(1,1,1)
-    obj.Label.TextXAlignment = Enum.TextXAlignment.Center
-    obj.Label.TextXOffset = 0
-
-    frame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            if callback then callback() end
-        end
-    end)
-
-    return obj
+local function makeRoundFrame(parent, size, pos, anchor)
+	local f = Instance.new("Frame")
+	f.Size = size
+	f.Position = pos or UDim2.new(0,0,0,0)
+	if anchor then f.AnchorPoint = anchor end
+	f.BackgroundColor3 = Color3.fromRGB(40,40,40)
+	f.BorderSizePixel = 0
+	f.Parent = parent
+	return f
 end
 
--- Checkbox
-function FleeUI:CreateCheckbox(parent, name, default, callback)
-    local obj, frame = createElementWrapper(name, parent)
+-- Create main menu GUI
+function FleeMenuLib:CreateMenu(opts)
+	opts = opts or {}
+	local player = Players.LocalPlayer
+	local playerGui = player:WaitForChild("PlayerGui")
 
-    local box = Instance.new("Frame")
-    box.Size = UDim2.new(0,26,0,26)
-    box.Position = UDim2.new(1,-42,0.5,0)
-    box.AnchorPoint = Vector2.new(1,0.5)
-    box.BackgroundColor3 = default and Color3.fromRGB(40,180,90) or Color3.fromRGB(60,60,60)
-    box.Parent = frame
+	local menu = {}
+	setmetatable(menu, FleeMenuLib)
 
-    local boxCorner = Instance.new("UICorner")
-    boxCorner.CornerRadius = UDim.new(0,6)
-    boxCorner.Parent = box
+	menu._player = player
+	menu._playerGui = playerGui
+	menu._elements = {} -- id -> {inst, type, value, ...}
+	menu._tabs = {} -- tabName -> tabFrame
+	menu._open = true
+	menu._minimized = false
+	menu._counter = 0
 
-    local check = Instance.new("TextLabel")
-    check.Size = UDim2.new(1,0,1,0)
-    check.BackgroundTransparency = 1
-    check.Text = "✓"
-    check.TextColor3 = Color3.new(1,1,1)
-    check.TextScaled = true
-    check.Font = Enum.Font.GothamBold
-    check.Visible = default
-    check.Parent = box
+	-- Configs
+	menu.Title = opts.Title or "Menu"
+	menu.OpenButtonImage = opts.OpenButtonImage or "rbxassetid://<IMAGE_ID_HERE>"
+	menu.IconImage = opts.IconImage or nil
 
-    local state = default or false
+	-- Build ScreenGui
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name = opts.ScreenGuiName or "FleeMenuAdvancedLib"
+	screenGui.ResetOnSpawn = false
+	screenGui.Parent = playerGui
+	menu._screenGui = screenGui
 
-    local function update()
-        box.BackgroundColor3 = state and Color3.fromRGB(40,180,90) or Color3.fromRGB(60,60,60)
-        check.Visible = state
-    end
-    update()
+	-- Main frame (center-ish)
+	local mainFrame = Instance.new("Frame")
+	mainFrame.Name = "MainFrame"
+	mainFrame.Size = UDim2.new(0.42,0,0.62,0)
+	mainFrame.Position = UDim2.new(0.5,0,0.5,0)
+	mainFrame.AnchorPoint = Vector2.new(0.5,0.5)
+	mainFrame.BackgroundColor3 = Color3.fromRGB(35,35,35)
+	mainFrame.BorderSizePixel = 0
+	mainFrame.Parent = screenGui
+	menu._mainFrame = mainFrame
 
-    box.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            state = not state
-            update()
-            if callback then callback(state) end
-        end
-    end)
+	-- TopBar
+	local topBar = Instance.new("Frame")
+	topBar.Name = "TopBar"
+	topBar.Size = UDim2.new(1,0,0,42)
+	topBar.BackgroundColor3 = Color3.fromRGB(24,24,24)
+	topBar.BorderSizePixel = 0
+	topBar.Parent = mainFrame
 
-    function obj:Set(value)
-        state = value
-        update()
-        if callback then callback(state) end
-    end
+	local titleLbl = Instance.new("TextLabel")
+	titleLbl.Name = "Title"
+	titleLbl.Size = UDim2.new(0.75,0,1,0)
+	titleLbl.Position = UDim2.new(0.02,0,0,0)
+	titleLbl.BackgroundTransparency = 1
+	titleLbl.Text = menu.Title
+	titleLbl.TextColor3 = Color3.new(1,1,1)
+	titleLbl.TextScaled = true
+	titleLbl.Font = Enum.Font.SourceSansBold
+	titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+	titleLbl.Parent = topBar
+	menu._titleLbl = titleLbl
 
-    return obj
+	-- Minimize button (inside topbar)
+	local minBtn = Instance.new("TextButton")
+	minBtn.Name = "Minimize"
+	minBtn.Size = UDim2.new(0,38,0,30)
+	minBtn.Position = UDim2.new(1,-86,0.5,-15)
+	minBtn.BackgroundColor3 = Color3.fromRGB(60,60,60)
+	minBtn.BorderSizePixel = 0
+	minBtn.Text = "—"
+	minBtn.TextColor3 = Color3.new(1,1,1)
+	minBtn.Font = Enum.Font.SourceSansBold
+	minBtn.TextScaled = true
+	minBtn.Parent = topBar
+	menu._minBtn = minBtn
+
+	-- Close button (inside topbar)
+	local closeBtn = Instance.new("TextButton")
+	closeBtn.Name = "Close"
+	closeBtn.Size = UDim2.new(0,38,0,30)
+	closeBtn.Position = UDim2.new(1,-40,0.5,-15)
+	closeBtn.BackgroundColor3 = Color3.fromRGB(200,40,40)
+	closeBtn.BorderSizePixel = 0
+	closeBtn.Text = "X"
+	closeBtn.TextColor3 = Color3.new(1,1,1)
+	closeBtn.Font = Enum.Font.SourceSansBold
+	closeBtn.TextScaled = true
+	closeBtn.Parent = topBar
+	menu._closeBtn = closeBtn
+
+	-- Side tabs area (left)
+	local tabsFrame = Instance.new("Frame")
+	tabsFrame.Name = "Tabs"
+	tabsFrame.Size = UDim2.new(0.22,0,1,-50)
+	tabsFrame.Position = UDim2.new(0,0,0,42)
+	tabsFrame.BackgroundTransparency = 1
+	tabsFrame.Parent = mainFrame
+	menu._tabsFrame = tabsFrame
+
+	local tabsLayout = Instance.new("UIListLayout")
+	tabsLayout.FillDirection = Enum.FillDirection.Vertical
+	tabsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	tabsLayout.Padding = UDim.new(0,6)
+	tabsLayout.Parent = tabsFrame
+
+	-- Content area (right)
+	local contentArea = Instance.new("Frame")
+	contentArea.Name = "Content"
+	contentArea.Size = UDim2.new(0.78,0,1,-50)
+	contentArea.Position = UDim2.new(0.22,0,0,42)
+	contentArea.BackgroundTransparency = 1
+	contentArea.Parent = mainFrame
+	menu._contentArea = contentArea
+
+	-- Basic function: addTab
+	function menu:AddTab(name)
+		if self._tabs[name] then return self._tabs[name].id end
+
+		-- tab button
+		local tabBtn = Instance.new("ImageButton")
+		tabBtn.Name = "TabBtn_"..name
+		tabBtn.Size = UDim2.new(1, -10, 0, 60)
+		tabBtn.Position = UDim2.new(0,5,0,0)
+		tabBtn.BackgroundColor3 = Color3.fromRGB(60,60,60)
+		tabBtn.BorderSizePixel = 0
+		tabBtn.Parent = tabsFrame
+
+		local lbl = Instance.new("TextLabel")
+		lbl.Size = UDim2.new(1,0,1,0)
+		lbl.BackgroundTransparency = 1
+		lbl.Text = name
+		lbl.TextColor3 = Color3.new(1,1,1)
+		lbl.TextScaled = true
+		lbl.Font = Enum.Font.SourceSansBold
+		lbl.Parent = tabBtn
+
+		-- Create scrolling content for this tab (but not visible until selected)
+		local scroll = Instance.new("ScrollingFrame")
+		scroll.Name = "Scroll_"..name
+		scroll.Size = UDim2.new(1, -10, 1, -10)
+		scroll.Position = UDim2.new(0,5,0,5)
+		scroll.BackgroundTransparency = 1
+		scroll.ScrollBarThickness = 6
+		scroll.Visible = false
+		scroll.Parent = contentArea
+		scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		scroll.CanvasSize = UDim2.new(0,0,0,0)
+
+		local list = Instance.new("UIListLayout")
+		list.Padding = UDim.new(0,6)
+		list.SortOrder = Enum.SortOrder.LayoutOrder
+		list.Parent = scroll
+
+		list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+			scroll.CanvasSize = UDim2.new(0,0,0,list.AbsoluteContentSize.Y + 10)
+		end)
+
+		local tabInfo = { id = newId(), name = name, btn = tabBtn, scroll = scroll, layout = list }
+		self._tabs[name] = tabInfo
+
+		-- Select tab on click
+		tabBtn.MouseButton1Click:Connect(function()
+			self:SelectTab(name)
+		end)
+
+		-- If first tab, select
+		if not self._selectedTab then
+			self:SelectTab(name)
+		end
+
+		return tabInfo.id
+	end
+
+	function menu:SelectTab(name)
+		if not self._tabs[name] then return end
+		-- hide all
+		for k,v in pairs(self._tabs) do
+			v.scroll.Visible = false
+		end
+		self._tabs[name].scroll.Visible = true
+		self._selectedTab = name
+	end
+
+	-- internal helper to register element
+	function menu:_registerElement(inst, typ, metadata)
+		local id = newId()
+		self._elements[id] = {
+			inst = inst,
+			type = typ,
+			meta = metadata or {},
+			value = metadata and metadata.default or nil,
+		}
+		return id
+	end
+
+	-- Create generic Entry container used by all widgets
+	local function createEntry(parent)
+		local frame = Instance.new("Frame")
+		frame.Size = UDim2.new(1,0,0,48)
+		frame.BackgroundColor3 = Color3.fromRGB(50,50,50)
+		frame.BorderSizePixel = 0
+		frame.Parent = parent
+		return frame
+	end
+
+	-- Add Button
+	function menu:AddButton(tabName, text, callback)
+		local tab = self._tabs[tabName]
+		if not tab then tab = self:AddTab(tabName) tab = self._tabs[tabName] end
+
+		local fr = createEntry(tab.scroll)
+		local lbl = Instance.new("TextLabel")
+		lbl.Size = UDim2.new(0.75, -10,1,0)
+		lbl.Position = UDim2.new(0,10,0,0)
+		lbl.BackgroundTransparency = 1
+		lbl.Text = text or "Button"
+		lbl.TextColor3 = Color3.new(1,1,1)
+		lbl.TextScaled = true
+		lbl.TextXAlignment = Enum.TextXAlignment.Left
+		lbl.Parent = fr
+
+		local btn = Instance.new("TextButton")
+		btn.Size = UDim2.new(0.24, -10, 0.8, 0)
+		btn.Position = UDim2.new(0.76, -10, 0.1, 0)
+		btn.BackgroundColor3 = Color3.fromRGB(90,90,90)
+		btn.BorderSizePixel = 0
+		btn.Text = "Click"
+		btn.Font = Enum.Font.SourceSansBold
+		btn.TextScaled = true
+		btn.Parent = fr
+
+		local id = self:_registerElement(fr, "button", {tab=tabName, text=text})
+		self._elements[id].button = btn
+		btn.MouseButton1Click:Connect(function()
+			if callback then
+				pcall(callback, id)
+			end
+		end)
+		return id
+	end
+
+	-- Add Toggle (IOS style)
+	function menu:AddToggle(tabName, text, default, callback)
+		local tab = self._tabs[tabName]
+		if not tab then tab = self:AddTab(tabName) tab = self._tabs[tabName] end
+
+		local fr = createEntry(tab.scroll)
+		local lbl = Instance.new("TextLabel")
+		lbl.Size = UDim2.new(0.6, -10,1,0)
+		lbl.Position = UDim2.new(0,10,0,0)
+		lbl.BackgroundTransparency = 1
+		lbl.Text = text or "Toggle"
+		lbl.TextColor3 = Color3.new(1,1,1)
+		lbl.TextScaled = true
+		lbl.TextXAlignment = Enum.TextXAlignment.Left
+		lbl.Parent = fr
+
+		-- container for toggle visual
+		local holder = Instance.new("Frame")
+		holder.Size = UDim2.new(0.35, -10,0.7,0)
+		holder.Position = UDim2.new(0.62, 0, 0.15, 0)
+		holder.BackgroundTransparency = 1
+		holder.Parent = fr
+
+		local offLabel = Instance.new("TextLabel")
+		offLabel.Size = UDim2.new(0.5,0,1,0)
+		offLabel.Position = UDim2.new(0,0,0,0)
+		offLabel.BackgroundTransparency = 1
+		offLabel.Text = "[0 off]"
+		offLabel.TextScaled = true
+		offLabel.Font = Enum.Font.SourceSans
+		offLabel.TextColor3 = Color3.new(1,1,1)
+		offLabel.TextXAlignment = Enum.TextXAlignment.Right
+		offLabel.Parent = holder
+
+		local onLabel = Instance.new("TextLabel")
+		onLabel.Size = UDim2.new(0.5,0,1,0)
+		onLabel.Position = UDim2.new(0.5,0,0,0)
+		onLabel.BackgroundTransparency = 1
+		onLabel.Text = "[on 0]"
+		onLabel.TextScaled = true
+		onLabel.Font = Enum.Font.SourceSansBold
+		onLabel.TextColor3 = Color3.new(1,1,1)
+		onLabel.TextXAlignment = Enum.TextXAlignment.Left
+		onLabel.Parent = holder
+
+		local state = default and true or false
+		local id = self:_registerElement(fr, "toggle", {tab=tabName, text=text, default=default})
+		self._elements[id].state = state
+		self._elements[id].offLabel = offLabel
+		self._elements[id].onLabel = onLabel
+
+		local function updateVisual()
+			if self._elements[id].state then
+				onLabel.TextTransparency = 0
+				offLabel.TextTransparency = 0.7
+			else
+				onLabel.TextTransparency = 0.7
+				offLabel.TextTransparency = 0
+			end
+		end
+		updateVisual()
+
+		local clickable = Instance.new("TextButton")
+		clickable.Size = UDim2.new(1,0,1,0)
+		clickable.BackgroundTransparency = 1
+		clickable.Text = ""
+		clickable.Parent = fr
+
+		clickable.MouseButton1Click:Connect(function()
+			self._elements[id].state = not self._elements[id].state
+			updateVisual()
+			if callback then
+				pcall(callback, self._elements[id].state, id)
+			end
+		end)
+
+		return id
+	end
+
+	-- Add Slider
+	function menu:AddSlider(tabName, text, min, max, default, callback)
+		min = min or 0
+		max = max or 100
+		default = default or min
+		local tab = self._tabs[tabName]
+		if not tab then tab = self:AddTab(tabName) tab = self._tabs[tabName] end
+
+		local fr = createEntry(tab.scroll)
+		local lbl = Instance.new("TextLabel")
+		lbl.Size = UDim2.new(0.45, -10,1,0)
+		lbl.Position = UDim2.new(0,10,0,0)
+		lbl.BackgroundTransparency = 1
+		lbl.Text = text or "Slider"
+		lbl.TextColor3 = Color3.new(1,1,1)
+		lbl.TextScaled = true
+		lbl.TextXAlignment = Enum.TextXAlignment.Left
+		lbl.Parent = fr
+
+		local valLbl = Instance.new("TextLabel")
+		valLbl.Size = UDim2.new(0.18, -10,1,0)
+		valLbl.Position = UDim2.new(0.64, 0,0,0)
+		valLbl.BackgroundTransparency = 1
+		valLbl.Text = tostring(default)
+		valLbl.TextColor3 = Color3.new(1,1,1)
+		valLbl.TextScaled = true
+		valLbl.Parent = fr
+
+		local barBg = Instance.new("Frame")
+		barBg.Size = UDim2.new(0.95, -10,0,10)
+		barBg.Position = UDim2.new(0,10,0.55,0)
+		barBg.AnchorPoint = Vector2.new(0,0)
+		barBg.BackgroundColor3 = Color3.fromRGB(80,80,80)
+		barBg.BorderSizePixel = 0
+		barBg.Parent = fr
+
+		local barFill = Instance.new("Frame")
+		barFill.Size = UDim2.new( (default-min)/(max-min), 0, 1, 0)
+		barFill.BackgroundColor3 = Color3.fromRGB(130,130,130)
+		barFill.BorderSizePixel = 0
+		barFill.Parent = barBg
+
+		local dragging = false
+		local id = self:_registerElement(fr, "slider", {tab=tabName, text=text, min=min, max=max})
+		self._elements[id].min = min
+		self._elements[id].max = max
+		self._elements[id].value = default
+		self._elements[id].fill = barFill
+		self._elements[id].valLbl = valLbl
+
+		barBg.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = true
+				local function move(input2)
+					local absPos = input2.Position.X - barBg.AbsolutePosition.X
+					local pct = math.clamp(absPos / barBg.AbsoluteSize.X, 0, 1)
+					local value = min + (max - min) * pct
+					value = math.floor(value) -- integer slider (change if want decimal)
+					self._elements[id].value = value
+					barFill.Size = UDim2.new(pct,0,1,0)
+					valLbl.Text = tostring(value)
+					if callback then pcall(callback, value, id) end
+				end
+				local conn; conn = game:GetService("UserInputService").InputChanged:Connect(function(i)
+					if dragging and i.UserInputType ~= Enum.UserInputType.MouseMovement then
+						-- for touch events, InputChanged may not be MouseMovement; still rely on AbsolutePosition via i.Position if available
+					end
+					if dragging then
+						local pt = i.Position or i
+						move(i)
+					end
+				end)
+				local upConn; upConn = game:GetService("UserInputService").InputEnded:Connect(function(i)
+					if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+						dragging = false
+						conn:Disconnect()
+						upConn:Disconnect()
+					end
+				end)
+			end
+		end)
+
+		return id
+	end
+
+	-- Add Dropdown
+	function menu:AddDropdown(tabName, text, options, defaultIndex, callback)
+		local tab = self._tabs[tabName]
+		if not tab then tab = self:AddTab(tabName) tab = self._tabs[tabName] end
+		options = options or {}
+		defaultIndex = defaultIndex or 1
+
+		local fr = createEntry(tab.scroll)
+		local lbl = Instance.new("TextLabel")
+		lbl.Size = UDim2.new(0.45, -10,1,0)
+		lbl.Position = UDim2.new(0,10,0,0)
+		lbl.BackgroundTransparency = 1
+		lbl.Text = text or "Dropdown"
+		lbl.TextColor3 = Color3.new(1,1,1)
+		lbl.TextScaled = true
+		lbl.TextXAlignment = Enum.TextXAlignment.Left
+		lbl.Parent = fr
+
+		local ddBtn = Instance.new("TextButton")
+		ddBtn.Size = UDim2.new(0.45, -10,0.9,0)
+		ddBtn.Position = UDim2.new(0.5, 0, 0.05, 0)
+		ddBtn.BackgroundColor3 = Color3.fromRGB(70,70,70)
+		ddBtn.BorderSizePixel = 0
+		ddBtn.Text = options[defaultIndex] or "Select"
+		ddBtn.TextColor3 = Color3.new(1,1,1)
+		ddBtn.TextScaled = true
+		ddBtn.Parent = fr
+
+		-- popup list (Frame)
+		local popup = Instance.new("Frame")
+		popup.Size = UDim2.new(0.45, -10,0,0)
+		popup.Position = UDim2.new(0.5,0,1,4)
+		popup.BackgroundColor3 = Color3.fromRGB(60,60,60)
+		popup.BorderSizePixel = 0
+		popup.Visible = false
+		popup.Parent = fr
+
+		local popupList = Instance.new("UIListLayout")
+		popupList.Parent = popup
+		popupList.SortOrder = Enum.SortOrder.LayoutOrder
+
+		local ddId = self:_registerElement(fr, "dropdown", {tab=tabName, text=text, options=options})
+		self._elements[ddId].options = options
+		self._elements[ddId].selectedIndex = defaultIndex
+		self._elements[ddId].button = ddBtn
+		self._elements[ddId].popup = popup
+
+		local function rebuildPopup()
+			for _,c in pairs(popup:GetChildren()) do if c:IsA("TextButton") then c:Destroy() end end
+			local height = 0
+			for i,opt in ipairs(self._elements[ddId].options) do
+				local b = Instance.new("TextButton")
+				b.Size = UDim2.new(1,0,0,36)
+				b.BackgroundTransparency = 0
+				b.BackgroundColor3 = Color3.fromRGB(80,80,80)
+				b.BorderSizePixel = 0
+				b.Text = opt
+				b.TextColor3 = Color3.new(1,1,1)
+				b.TextScaled = true
+				b.Parent = popup
+				height = height + 36
+				b.MouseButton1Click:Connect(function()
+					self._elements[ddId].selectedIndex = i
+					ddBtn.Text = opt
+					popup.Visible = false
+					if callback then pcall(callback, opt, i, ddId) end
+				end)
+			end
+			popup.Size = UDim2.new(popup.Size.X.Scale, popup.Size.X.Offset, 0, height)
+		end
+		rebuildPopup()
+
+		ddBtn.MouseButton1Click:Connect(function()
+			popup.Visible = not popup.Visible
+		end)
+
+		return ddId
+	end
+
+	-- Add TextBox
+	function menu:AddTextBox(tabName, text, default, callback)
+		local tab = self._tabs[tabName]
+		if not tab then tab = self:AddTab(tabName) tab = self._tabs[tabName] end
+
+		local fr = createEntry(tab.scroll)
+		local lbl = Instance.new("TextLabel")
+		lbl.Size = UDim2.new(0.32, -10,1,0)
+		lbl.Position = UDim2.new(0,10,0,0)
+		lbl.BackgroundTransparency = 1
+		lbl.Text = text or "Text"
+		lbl.TextColor3 = Color3.new(1,1,1)
+		lbl.TextScaled = true
+		lbl.TextXAlignment = Enum.TextXAlignment.Left
+		lbl.Parent = fr
+
+		local tb = Instance.new("TextBox")
+		tb.Size = UDim2.new(0.64, -10,0.8,0)
+		tb.Position = UDim2.new(0.34, 0, 0.1, 0)
+		tb.BackgroundColor3 = Color3.fromRGB(80,80,80)
+		tb.Text = default or ""
+		tb.ClearTextOnFocus = false
+		tb.TextColor3 = Color3.new(1,1,1)
+		tb.Font = Enum.Font.SourceSans
+		tb.TextScaled = true
+		tb.Parent = fr
+
+		local id = self:_registerElement(fr, "textbox", {tab=tabName, text=text, default=default})
+		self._elements[id].textbox = tb
+
+		tb.FocusLost:Connect(function(enterPressed)
+			if callback then pcall(callback, tb.Text, id) end
+		end)
+
+		return id
+	end
+
+	-- Add Checkbox (small)
+	function menu:AddCheckbox(tabName, text, default, callback)
+		local tab = self._tabs[tabName]
+		if not tab then tab = self:AddTab(tabName) tab = self._tabs[tabName] end
+
+		local fr = createEntry(tab.scroll)
+		local lbl = Instance.new("TextLabel")
+		lbl.Size = UDim2.new(0.72, -10,1,0)
+		lbl.Position = UDim2.new(0,10,0,0)
+		lbl.BackgroundTransparency = 1
+		lbl.Text = text or "Check"
+		lbl.TextColor3 = Color3.new(1,1,1)
+		lbl.TextScaled = true
+		lbl.TextXAlignment = Enum.TextXAlignment.Left
+		lbl.Parent = fr
+
+		local box = Instance.new("TextButton")
+		box.Size = UDim2.new(0.15, -10,0.7,0)
+		box.Position = UDim2.new(0.82, 0, 0.15, 0)
+		box.BackgroundColor3 = default and Color3.fromRGB(120,200,120) or Color3.fromRGB(100,100,100)
+		box.BorderSizePixel = 0
+		box.Text = default and "✓" or ""
+		box.TextScaled = true
+		box.Parent = fr
+
+		local id = self:_registerElement(fr, "checkbox", {tab=tabName, text=text, default=default})
+		self._elements[id].checked = default and true or false
+		self._elements[id].box = box
+
+		box.MouseButton1Click:Connect(function()
+			self._elements[id].checked = not self._elements[id].checked
+			box.BackgroundColor3 = self._elements[id].checked and Color3.fromRGB(120,200,120) or Color3.fromRGB(100,100,100)
+			box.Text = self._elements[id].checked and "✓" or ""
+			if callback then pcall(callback, self._elements[id].checked, id) end
+		end)
+
+		return id
+	end
+
+    -- Value getters/setters
+	function menu:GetValue(id)
+		local e = self._elements[id]
+		if not e then return nil end
+		if e.type == "toggle" then return e.state end
+		if e.type == "slider" then return e.value end
+		if e.type == "dropdown" then return e.options and e.options[e.selectedIndex] or nil end
+		if e.type == "textbox" then return e.textbox and e.textbox.Text or nil end
+		if e.type == "checkbox" then return e.checked end
+		if e.type == "button" then return nil end
+		return e.value
+	end
+
+	function menu:SetValue(id, val)
+		local e = self._elements[id]
+		if not e then return false end
+		if e.type == "toggle" then
+			e.state = not not val
+			if e.onLabel and e.offLabel then
+				e.onLabel.TextTransparency = e.state and 0 or 0.7
+				e.offLabel.TextTransparency = e.state and 0.7 or 0
+			end
+			return true
+		end
+		if e.type == "slider" then
+			e.value = math.clamp(math.floor(val), e.min, e.max)
+			local pct = (e.value - e.min) / (e.max - e.min)
+			if e.fill then e.fill.Size = UDim2.new(pct,0,1,0) end
+			if e.valLbl then e.valLbl.Text = tostring(e.value) end
+			return true
+		end
+		if e.type == "dropdown" then
+			for i,opt in ipairs(e.options) do
+				if opt == val then
+					e.selectedIndex = i
+					if e.button then e.button.Text = val end
+					return true
+				end
+			end
+			return false
+		end
+		if e.type == "textbox" then
+			if e.textbox then e.textbox.Text = tostring(val) end
+			return true
+		end
+		if e.type == "checkbox" then
+			e.checked = not not val
+			if e.box then
+				e.box.BackgroundColor3 = e.checked and Color3.fromRGB(120,200,120) or Color3.fromRGB(100,100,100)
+				e.box.Text = e.checked and "✓" or ""
+			end
+			return true
+		end
+		return false
+	end
+
+	function menu:SetEnabled(id, enabled)
+		local e = self._elements[id]
+		if not e then return false end
+		if e.inst then
+			e.inst.Visible = enabled and true or false
+			return true
+		end
+		return false
+	end
+
+	function menu:DestroyElement(id)
+		local e = self._elements[id]
+		if not e then return false end
+		if e.inst then
+			pcall(function() e.inst:Destroy() end)
+		end
+		self._elements[id] = nil
+		return true
+	end
+
+	-- Minimize / Restore handling
+	local function doMinimize()
+		if menu._minimized then
+			-- restore
+			mainFrame.Size = UDim2.new(0.42,0,0.62,0)
+			menu._minimized = false
+		else
+			mainFrame.Size = UDim2.new(0.42,0,0,42) -- only top bar visible
+			menu._minimized = true
+		end
+	end
+
+	minBtn.MouseButton1Click:Connect(function()
+		doMinimize()
+	end)
+
+	closeBtn.MouseButton1Click:Connect(function()
+		mainFrame.Visible = false
+		menu._open = false
+	end)
+
+	-- External floating open/close button (fixed)
+	local floatBtn = Instance.new("ImageButton")
+	floatBtn.Name = "FloatOpen"
+	floatBtn.Size = UDim2.new(0,60,0,60)
+	floatBtn.Position = UDim2.new(1,-70,0.6,0)
+	floatBtn.AnchorPoint = Vector2.new(0,0.5)
+	floatBtn.BackgroundColor3 = Color3.fromRGB(55,55,55)
+	floatBtn.BorderSizePixel = 0
+	floatBtn.Image = menu.OpenButtonImage
+	floatBtn.Parent = screenGui
+	menu._floatBtn = floatBtn
+
+	floatBtn.MouseButton1Click:Connect(function()
+		if mainFrame.Visible then
+			mainFrame.Visible = false
+			menu._open = false
+		else
+			mainFrame.Visible = true
+			menu._open = true
+		end
+	end)
+
+	-- API: SetTitle / SetOpenImage
+	function menu:SetTitle(txt)
+		self.Title = tostring(txt)
+		self._titleLbl.Text = self.Title
+	end
+	function menu:SetOpenButtonImage(image)
+		self.OpenButtonImage = image
+		self._floatBtn.Image = image
+	end
+
+	-- final: return menu
+	return menu
 end
 
--- Slider (básico)
-function FleeUI:CreateSlider(parent, name, min, max, default, callback)
-    local obj, frame = createElementWrapper(name, parent)
-    frame.Size = UDim2.new(1,0,0,64)
-
-    local valueLabel = Instance.new("TextLabel")
-    valueLabel.Size = UDim2.new(0.3,0,0.4,0)
-    valueLabel.Position = UDim2.new(1,-10,0.1,0)
-    valueLabel.AnchorPoint = Vector2.new(1,0)
-    valueLabel.BackgroundTransparency = 1
-    valueLabel.Text = tostring(default)
-    valueLabel.TextColor3 = Color3.fromRGB(200,200,255)
-    valueLabel.TextScaled = true
-    valueLabel.Parent = frame
-
-    local bar = Instance.new("Frame")
-    bar.Size = UDim2.new(0.9,0,0,8)
-    bar.Position = UDim2.new(0.05,0,0.65,0)
-    bar.BackgroundColor3 = Color3.fromRGB(50,50,50)
-    bar.Parent = frame
-
-    local fill = Instance.new("Frame")
-    fill.Size = UDim2.new(0.5,0,1,0)
-    fill.BackgroundColor3 = Color3.fromRGB(100,160,255)
-    fill.BorderSizePixel = 0
-    fill.Parent = bar
-
-    local fillCorner = Instance.new("UICorner")
-    fillCorner.CornerRadius = UDim.new(1,0)
-    fillCorner.Parent = fill
-
-    local barCorner = Instance.new("UICorner")
-    barCorner.CornerRadius = UDim.new(1,0)
-    barCorner.Parent = bar
-
-    local dragging = false
-
-    local function update(percent)
-        local val = math.floor(min + (max - min) * percent + 0.5)
-        valueLabel.Text = tostring(val)
-        fill.Size = UDim2.new(percent, 0, 1, 0)
-        if callback then callback(val) end
-    end
-
-    local startPercent = (default - min) / (max - min)
-    update(math.clamp(startPercent, 0, 1))
-
-    bar.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-        end
-    end)
-
-    bar.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
-        end
-    end)
-
-    game:GetService("UserInputService").InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local mousePos = input.Position.X
-            local barAbs = bar.AbsolutePosition.X
-            local barSize = bar.AbsoluteSize.X
-            local rel = math.clamp((mousePos - barAbs) / barSize, 0, 1)
-            update(rel)
-        end
-    end)
-
-    function obj:Set(value)
-        local clamped = math.clamp(value, min, max)
-        local percent = (clamped - min) / (max - min)
-        update(percent)
-    end
-
-    return obj
-end
-
--- Dropdown e Textbox deixei como exercício / próximos passos (mais complexos)
--- Se quiser posso implementar depois
-
--- ────────────────────────────────────────────────
--- Sistema de abas
--- ────────────────────────────────────────────────
-
-local currentTab = nil
-local tabFrames = {}
-
-function FleeUI:CreateTab(name)
-    local tabBtn = Instance.new("TextButton")
-    tabBtn.Size = UDim2.new(0.24,0,1,-6)
-    tabBtn.Position = UDim2.new(0,0,0,3)
-    tabBtn.BackgroundColor3 = Color3.fromRGB(45,45,45)
-    tabBtn.Text = name
-    tabBtn.TextColor3 = Color3.new(0.9,0.9,0.9)
-    tabBtn.Font = Enum.Font.GothamSemibold
-    tabBtn.TextScaled = true
-    tabBtn.Parent = tabButtonsHolder
-
-    local tabFrame = Instance.new("Frame")
-    tabFrame.Name = name .. "Tab"
-    tabFrame.Size = UDim2.new(1,0,1,0)
-    tabFrame.BackgroundTransparency = 1
-    tabFrame.Visible = false
-    tabFrame.Parent = tabContent
-
-    local list = Instance.new("UIListLayout")
-    list.Padding = UDim.new(0,8)
-    list.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    list.Parent = tabFrame
-
-    tabFrames[name] = tabFrame
-
-    local function selectTab()
-        if currentTab then
-            currentTab.Visible = false
-        end
-        tabFrame.Visible = true
-        currentTab = tabFrame
-
-        for _,btn in tabButtonsHolder:GetChildren() do
-            if btn:IsA("TextButton") then
-                btn.BackgroundColor3 = (btn == tabBtn) and Color3.fromRGB(65,65,65) or Color3.fromRGB(45,45,45)
-            end
-        end
-    end
-
-    tabBtn.MouseButton1Click:Connect(selectTab)
-
-    -- Abre a primeira aba automaticamente
-    if not currentTab then selectTab() end
-
-    return tabFrame
-end
-
--- Fecha / abre janela inteira
-function FleeUI:Toggle()
-    mainFrame.Visible = not mainFrame.Visible
-end
-
-function FleeUI:SetTitle(text)
-    titleLabel.Text = text
-end
-
--- Exemplo de uso
-do
-    local tab1 = FleeUI:CreateTab("Principal")
-    local tab2 = FleeUI:CreateTab("Visual")
-    local tab3 = FleeUI:CreateTab("Outros")
-
-    local tog1 = FleeUI:CreateToggle(tab1, "Speed Hack", false, function(state)
-        print("Speed →", state)
-    end)
-
-    FleeUI:CreateCheckbox(tab1, "No Clip", false, function(v)
-        print("NoClip:", v)
-    end)
-
-    FleeUI:CreateButton(tab1, "Teleport to Exit", function()
-        print("Teleport acionado!")
-    end)
-
-    FleeUI:CreateSlider(tab1, "WalkSpeed", 16, 120, 40, function(val)
-        print("WalkSpeed definido para:", val)
-    end)
-
-    -- Você pode guardar os objetos e modificar depois
-    -- tog1:Set(true)   -- liga o toggle
-    -- tog1:SetLabel("Super Speed")
-end
-
-return FleeUI
+return FleeMenuLib
